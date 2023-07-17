@@ -4,9 +4,36 @@ import scipy
 import lap
 from scipy.spatial.distance import cdist
 
-from cython_bbox import bbox_overlaps as bbox_ious
 from yolox.tracker import kalman_filter
 import time
+
+def bbox_ious(atlbrs, btlbrs):
+    """
+    Compute the Intersection over Union (IoU) of two sets of boxes.
+    E.g.:
+        A ∩ B / A ∪ B = A ∩ B / (area(A) + area(B) - A ∩ B)
+    :param atlbrs: (tensor) bounding boxes, sized [N,4].
+    :param btlbrs: (tensor) bounding boxes, sized [M,4].
+    :return: (tensor) iou, sized [N,M].
+    """
+    N = atlbrs.shape[0]
+    M = btlbrs.shape[0]
+
+    tl = np.maximum(atlbrs[:, None, :2], btlbrs[:, :2])  # [N,M,2]
+    br = np.minimum(atlbrs[:, None, 2:], btlbrs[:, 2:])  # [N,M,2]
+
+    wh = np.maximum(br - tl, 0)  # width-height, [N,M,2]
+    inter = wh[:, :, 0] * wh[:, :, 1]  # [N,M]
+
+    area_a = (atlbrs[:, 2] - atlbrs[:, 0]) * (atlbrs[:, 3] - atlbrs[:, 1])  # [N,]
+    area_b = (btlbrs[:, 2] - btlbrs[:, 0]) * (btlbrs[:, 3] - btlbrs[:, 1])  # [M,]
+    area_a = area_a[:, None]  # [N,1]
+    area_b = area_b[None, :]  # [1,M]
+
+    union = area_a + area_b - inter
+    iou = inter / union
+
+    return iou
 
 def merge_matches(m1, m2, shape):
     O,P,Q = shape
